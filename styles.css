@@ -85,6 +85,82 @@ body {
     transition: background 0.4s ease, color 0.25s ease;
 }
 
+/* ============== ЭКРАН ЗАГРУЗКИ + ВХОДНАЯ АНИМАЦИЯ ============== */
+#appLoader {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-body);
+    transition: opacity 0.7s ease, visibility 0.7s ease;
+}
+html:not(.js-anim) #appLoader { display: none; }
+body.loaded #appLoader {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+.loader-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+}
+.loader-icon {
+    width: 84px;
+    height: 84px;
+    border-radius: 24px;
+    background: var(--gradient-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 38px;
+    color: #fff;
+    animation: loaderPulse 1.4s ease-in-out infinite;
+}
+@keyframes loaderPulse {
+    0%,100% { transform: scale(1); box-shadow: 0 0 30px rgba(124,92,246,0.5); }
+    50%     { transform: scale(1.08); box-shadow: 0 0 65px rgba(124,92,246,0.9); }
+}
+.loader-name {
+    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    background: var(--gradient-text);
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+}
+.loader-dots { display: flex; gap: 8px; }
+.loader-dots span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: loaderDot 1s ease-in-out infinite;
+}
+.loader-dots span:nth-child(2) { animation-delay: 0.15s; }
+.loader-dots span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes loaderDot {
+    0%,100% { opacity: 0.3; transform: translateY(0); }
+    50%     { opacity: 1; transform: translateY(-7px); }
+}
+
+@keyframes rise {
+    from { opacity: 0; transform: translateY(26px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.js-anim .header,
+.js-anim .columns > .card,
+.js-anim .footer { opacity: 0; }
+body.loaded .header { animation: rise 0.7s cubic-bezier(0.2,0.7,0.2,1) forwards; }
+body.loaded .columns > .card:nth-child(1) { animation: rise 0.75s cubic-bezier(0.2,0.7,0.2,1) 0.15s forwards; }
+body.loaded .columns > .card:nth-child(2) { animation: rise 0.75s cubic-bezier(0.2,0.7,0.2,1) 0.3s forwards; }
+body.loaded .footer { animation: rise 0.7s ease 0.45s forwards; }
+
 /* ============== АНИМИРОВАННЫЙ ФОН ============== */
 .bg-scene {
     position: fixed;
@@ -867,4 +943,6 @@ h2 i {
 @media (prefers-reduced-motion: reduce) {
     .blob, .btn-primary, .badge-dot, .tab-pane, .message { animation: none !important; }
     html { scroll-behavior: auto; }
+    #appLoader { display: none !important; }
+    .js-anim .header, .js-anim .columns > .card, .js-anim .footer { opacity: 1 !important; animation: none !important; }
 }

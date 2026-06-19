@@ -9,8 +9,18 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <script>(function(){document.documentElement.classList.add('js-anim');})();</script>
 </head>
 <body>
+    <!-- Экран загрузки -->
+    <div id="appLoader" aria-hidden="true">
+        <div class="loader-inner">
+            <div class="loader-icon"><i class="fas fa-feather-alt"></i></div>
+            <div class="loader-name">Nova AI</div>
+            <div class="loader-dots"><span></span><span></span><span></span></div>
+        </div>
+    </div>
+
     <!-- Анимированный неоновый фон -->
     <div class="bg-scene" aria-hidden="true">
         <div class="blob blob-1"></div>
@@ -117,6 +127,10 @@
         </footer>
     </div>
 
+    <script>
+      window.addEventListener('load', function(){ setTimeout(function(){ document.body.classList.add('loaded'); }, 900); });
+      setTimeout(function(){ document.body.classList.add('loaded'); }, 2600);
+    </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/docx@7.8.2/build/index.min.js"></script>
