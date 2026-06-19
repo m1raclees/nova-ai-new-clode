@@ -24,6 +24,8 @@ const sendChatBtn = document.getElementById('sendChatBtn');
 const tabs = document.querySelectorAll('.tab');
 const panes = document.querySelectorAll('.tab-pane');
 const themeToggleBtn = document.getElementById('themeToggleBtn');
+const historyList = document.getElementById('historyList');
+const clearHistoryBtn = document.getElementById('clearHistoryBtn');
 
 let currentFile = null;
 let lastResultText = '';
@@ -44,7 +46,6 @@ function toggleTheme() {
     const isDark = document.body.classList.contains('dark');
     setTheme(isDark ? 'light' : 'dark');
 }
-// Загружаем сохранённую тему
 const savedTheme = localStorage.getItem('nova-theme');
 if (savedTheme === 'dark') {
     setTheme('dark');
@@ -53,10 +54,46 @@ if (savedTheme === 'dark') {
 }
 themeToggleBtn?.addEventListener('click', toggleTheme);
 
+// === БЕЗОПАСНЫЙ МИНИ-РЕНДЕР MARKDOWN -> HTML ===
+function renderMarkdown(md) {
+    const lines = String(md).replace(/\r\n/g, '\n').split('\n');
+    let html = '';
+    let listType = null;
+    const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+    const inline = (s) => {
+        let t = escapeHtml(s);
+        t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        t = t.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
+        t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+        return t;
+    };
+    for (const raw of lines) {
+        const line = raw.trim();
+        if (!line) { closeList(); continue; }
+        let m;
+        if ((m = line.match(/^(#{1,6})\s+(.*)$/))) {
+            closeList();
+            const lvl = Math.min(m[1].length, 4);
+            html += `<h${lvl}>${inline(m[2])}</h${lvl}>`;
+        } else if ((m = line.match(/^\d+[.)]\s+(.*)$/))) {
+            if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+            html += `<li>${inline(m[1])}</li>`;
+        } else if ((m = line.match(/^[-*•]\s+(.*)$/))) {
+            if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+            html += `<li>${inline(m[1])}</li>`;
+        } else {
+            closeList();
+            html += `<p>${inline(line)}</p>`;
+        }
+    }
+    closeList();
+    return html;
+}
+
 // Переключение вкладок
 tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-        const targetId = tab.dataset.tab === 'questions' ? 'questionsPane' : 'chatPane';
+        const targetId = tab.dataset.tab + 'Pane';
         tabs.forEach(t => t.classList.remove('active'));
         panes.forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
@@ -156,7 +193,8 @@ generateBtn.addEventListener('click', async () => {
         const data = await res.json();
         if (data.result) {
             lastResultText = data.result;
-            resultContentDiv.innerHTML = `<div class="result-text">${escapeHtml(data.result).replace(/\n/g, '<br>')}</div>`;
+            resultContentDiv.innerHTML = `<div class="result-text">${renderMarkdown(data.result)}</div>`;
+            addHistoryEntry(text, data.result);
         } else {
             resultContentDiv.innerHTML = `<div class="placeholder">Ошибка: ${escapeHtml(data.error)}</div>`;
         }
@@ -168,13 +206,79 @@ generateBtn.addEventListener('click', async () => {
 });
 
 function escapeHtml(str) {
-    return str.replace(/[&<>]/g, function(m) {
+    return String(str).replace(/[&<>]/g, function(m) {
         if (m === '&') return '&amp;';
         if (m === '<') return '&lt;';
         if (m === '>') return '&gt;';
         return m;
     });
 }
+
+// === ИСТОРИЯ ГЕНЕРАЦИЙ (localStorage, без базы данных) ===
+const HISTORY_KEY = 'nova-history';
+
+function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; }
+    catch { return []; }
+}
+function saveHistory(arr) {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(arr));
+}
+function deriveTopic(sourceText) {
+    if (currentFile && currentFile.name) return currentFile.name;
+    const clean = (sourceText || '').trim().replace(/\s+/g, ' ');
+    if (!clean) return 'Без названия';
+    return clean.length > 60 ? clean.slice(0, 60) + '…' : clean;
+}
+function formatDateTime(iso) {
+    const d = new Date(iso);
+    return d.toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function addHistoryEntry(sourceText, result) {
+    const history = loadHistory();
+    history.unshift({ id: Date.now(), topic: deriveTopic(sourceText), time: new Date().toISOString(), result });
+    if (history.length > 50) history.length = 50;
+    saveHistory(history);
+    renderHistory();
+}
+function renderHistory() {
+    if (!historyList) return;
+    const history = loadHistory();
+    if (!history.length) {
+        historyList.innerHTML = '<div class="placeholder"><i class="fas fa-clock-rotate-left"></i><p>Здесь появится история сгенерированных вопросов</p></div>';
+        return;
+    }
+    historyList.innerHTML = history.map(item => `
+        <button class="history-item" data-id="${item.id}">
+            <span class="history-icon"><i class="fas fa-file-lines"></i></span>
+            <span class="history-meta">
+                <span class="history-topic">${escapeHtml(item.topic)}</span>
+                <span class="history-time"><i class="fas fa-clock"></i> ${formatDateTime(item.time)}</span>
+            </span>
+            <span class="history-open"><i class="fas fa-arrow-right"></i></span>
+        </button>
+    `).join('');
+    historyList.querySelectorAll('.history-item').forEach(btn => {
+        btn.addEventListener('click', () => openHistoryEntry(Number(btn.dataset.id)));
+    });
+}
+function openHistoryEntry(id) {
+    const item = loadHistory().find(h => h.id === id);
+    if (!item) return;
+    lastResultText = item.result;
+    resultContentDiv.innerHTML = `<div class="result-text">${renderMarkdown(item.result)}</div>`;
+    tabs.forEach(t => t.classList.remove('active'));
+    panes.forEach(p => p.classList.remove('active'));
+    const qTab = document.querySelector('.tab[data-tab="questions"]');
+    if (qTab) qTab.classList.add('active');
+    document.getElementById('questionsPane').classList.add('active');
+}
+clearHistoryBtn?.addEventListener('click', () => {
+    if (confirm('Очистить всю историю?')) {
+        saveHistory([]);
+        renderHistory();
+    }
+});
 
 // Копирование
 copyResultBtn?.addEventListener('click', () => {
@@ -185,7 +289,7 @@ copyResultBtn?.addEventListener('click', () => {
 // Очистка
 clearResultBtn?.addEventListener('click', () => {
     lastResultText = '';
-    resultContentDiv.innerHTML = `<div class="placeholder"><i class="fas fa-arrow-left"></i><p>Сгенерируйте вопросы – они появятся здесь</p></div>`;
+    resultContentDiv.innerHTML = `<div class="placeholder"><i class="fas fa-wand-magic-sparkles"></i><p>Сгенерируйте вопросы – они появятся здесь</p></div>`;
 });
 
 // Скачивание (три отдельные кнопки)
@@ -247,11 +351,12 @@ function addMessage(role, text) {
     div.className = `message ${role === 'user' ? 'user' : 'bot'}`;
     const avatar = role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
     const sender = role === 'user' ? 'Вы' : 'Nova AI';
+    const body = role === 'user' ? escapeHtml(text).replace(/\n/g, '<br>') : renderMarkdown(text);
     div.innerHTML = `
         <div class="avatar">${avatar}</div>
         <div class="bubble">
             <div class="sender">${sender}</div>
-            <div class="text">${escapeHtml(text).replace(/\n/g, '<br>')}</div>
+            <div class="text">${body}</div>
         </div>
     `;
     chatMessages.appendChild(div);
@@ -281,3 +386,4 @@ function removeTyping(id) {
 }
 
 updateCharCounter();
+renderHistory();
